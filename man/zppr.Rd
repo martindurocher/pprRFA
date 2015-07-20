@@ -61,12 +61,12 @@ of respective function for more delails }
 
 A projection pursuit regression (PPR) is a model of the form
 
-$$ \mu + \sum_p \left[ g_p (\alpha_p X) \right] $$
+$ mu + sum_p left[ g_p (alpha_p X) right] $
 
-where $\alpha_p$ are direction vectors, X is a design matrix of covariates
+where $alpha_p$ are direction vectors, X is a design matrix of covariates
 and $g_p$ are smooth functions.
 
-An iterative procedure is used to estimate jointly $\mu$, $\alpha_p$ and
+An iterative procedure is used to estimate jointly $mu$, $alpha_p$ and
 smooth functions $g_p$ by least-squares. See  Friedman &
 Stuetzle (1981)
 
@@ -74,12 +74,12 @@ If generalized least-squares are used (criteria == gls), the total error
 is characterized by a sampling error and a model error. 
 See Tasker & Stedinger (1989). The resulting covariance matrix isgit
 
-$$\sigma^2 I + \Sigma$$
+$sigma^2 I + Sigma$
 
-where $\sigma^2$ is the variance of the model error and $\Sigma$ is 
+where $sigma^2$ is the variance of the model error and $Sigma$ is 
 the covariance matrix (diagonal) of the sampling error. First a PPR 
 model with is fitted using ordinary least-squares (criteria == ols) to 
-estimate the $\sigma^2$ by the empirical residual variance. Afterwards, 
+estimate the $sigma^2$ by the empirical residual variance. Afterwards, 
 the gls weights are calculated. This process is not iterated. An improved 
 solution is later obtained by the ppr2gam method. 
 
