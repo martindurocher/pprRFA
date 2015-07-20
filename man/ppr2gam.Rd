@@ -89,8 +89,10 @@ Association, 97, 1042–1054. doi:10.1198/016214502388618861
 \link{ppr}, link{gam}, \link{s}, \link{optim}
 }
 \examples{
+####################################
+## Regression of the return level ##
+####################################
 
-# load data from nsRFA packages
 library(nsRFA)
 data(hydroSIMN)
 
@@ -116,8 +118,46 @@ gfit <- ppr2gam(fit, k = 5)
 print(gfit)
 plot(gfit)
 terms_plot(gfit)
-			
+	
+#########################################
+## Prediction by the index flood model ##
+#########################################
+
+ldata <- get_split_an(mydata)
+lmom <- t(sapply(ldata,Lmoments))
+
+# Modeling the mean.
+mydata <- set_response(mydata, 
+	data.frame(no = mydata$x[,1], z = log(lmom[,'l1']) , varz =1)
+	)
+	
+fit <- zppr(mydata, nterms = 2, criteria = 'wls')
+gfit_l1 <- ppr2gam(fit, k = 5)
+
+# Modeling the lcv.
+mydata <- set_response(mydata, 
+	data.frame(no = mydata$x[,1], z = lmom[,'lcv'] , varz =1)
+	)
+	
+fit <- zppr(mydata, nterms = 1, criteria = 'wls')
+gfit_lcv <- ppr2gam(fit, k = 5)
+
+# Modeling the lca.
+mydata <- set_response(mydata, 
+	data.frame(no = mydata$x[,1], z = lmom[,'lca'] , varz =1)
+	)
+	
+fit <- zppr(mydata, nterms = 2, criteria = 'wls')
+gfit_lca <- ppr2gam(fit, k = 5)
+
+# predict return level according to index flood assumption
+pred <- cbind(exp(predict(gfit_l1)),predict(gfit_lcv),
+	predict(gfit_lca))
+	
+pars <- par.GEV(pred[,1],pred[,1]*pred[,2],pred[,3])
+print(invF.GEV(.9,pars$xi,pars$alfa,pars$k))
 }
+
 % Add one or more standard keywords, see file 'KEYWORDS' in the
 % R documentation directory.
 \keyword{ ~kwd1 }

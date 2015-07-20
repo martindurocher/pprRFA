@@ -17,17 +17,21 @@ new_rfa_data <- function(annual,attrib)
 	nsite <- sapply(split(y[,3],y[,1]),length)
 		
 	self <- list(x=attrib, y = annual, n = length(tmp), 
-		response = NULL, nsite= nsite)
+		response = NULL, nsite= nsite, 
+		p = ncol(attrib) - 1)
 	
 	class(self) <- 'rfa'
 	return(self)
 }
 
+get_split_an <- function(x) UseMethod('get_split_an',x)
+get_split_an.rfa <- function(self) split(self$y[,3],self$y[,1])
+
 at_site_boot_log <- function(x,...) UseMethod('at_site_boot_log',x)
 at_site_boot_log.rfa <- function(self, ret = 2, nboot=500, ...)
 {
 
-	ylist <- split(self$y[,3],self$y[,1])
+	ylist <- get_split_an(self)
 	m <- length(ylist)
 	ans <- data.frame(z = rep(0,m), var = rep(0,m))
 	
@@ -106,9 +110,12 @@ zppr.rfa <- function(self, w=NULL, criteria = 'wls', nterms = 1, ...)
 			
 	}
 	
+	sig2 <- var(residuals(fit))
+	
 	ans <- list(response = self$response[,2], fit = fit, alpha = fit$alpha,
 		w = w, criteria = criteria, x = self$x[,-1], beta = fit$beta,
-		sample_var = self$response[,3], sig2 = sig2 )
+		sample_var = self$response[,3], sig2 = sig2, nterms = nterms,
+		p = self$p )
 		
 	class(ans) <- append(class(ans),'zppr')	
 	
@@ -124,7 +131,7 @@ print.zppr <- function(self)
 	zerr <- residuals(self$fit)
 	zhat <- predict(self$fit)
 	
-	sigma <- sd(zerr)
+	sigma <- sqrt(self$sig2)
 	r2 <- 1-var(zerr)/var(self$response)
 	
 	cat('\n#####################\n')
@@ -154,42 +161,47 @@ plot.zppr <- function(self)
 
 }
 
-alpha2mat <- function(alpha,p)
+alpha2mat <- function(alpha,nterms)
 {
 	# transform a vector of alphas in a matrix with unitary columns
 	# used by ppr2gam
-	ans <- matrix(alpha, ncol = p)
+	ans <- matrix(alpha, ncol = nterms)
 
-	for(i in seq(p))
+	for(i in seq(nterms))
 		ans[,i] <- ans[,i]/sqrt(sum(ans[,i]^2))
 		
 	return(ans)
 }
 
-ppr_alpha <- function(alpha,arg)
+ppr_alpha <- function(alpha,arg, opti)
 {
 	#optimize a gam model for given alphas
 	# used by ppr2gam
-	amat <- alpha2mat(alpha,arg$p)
+	amat <- alpha2mat(alpha,arg$nterms)
 	nu <- arg$x %*% amat
 	yx <- data.frame(arg$y,nu)
-	names(yx) <- c('Y',paste('NU',seq(arg$p),sep=''))
+	names(yx) <- c('Y',paste('NU',seq(arg$nterms),sep=''))
 	
-	fit <- gam(as.formula(arg$cmd), data = yx, weights = arg$w)
+	if(is.null(arg$w))
+		fit <- gam(as.formula(arg$cmd), data = yx)
+	else
+		fit <- gam(as.formula(arg$cmd), data = yx, weights = arg$w)
 	
-	return(fit$gcv.ubre)
+	# opti == TRUE is used when optimizing alpha
+	if(opti)
+		return(fit$gcv.ubre)
+	else
+		return(fit)
 }
 
 ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE, 
 	gls_tol = 1e-6, gls_maxit = 10,...)
 {
 	# create string for the model formula
-	p <- ncol(as.matrix(self$alpha))
-	
 	cmd <- "Y~"
 	sopt <- paste(",bs='", basis, "',fx=",fx,",m=",m,")",sep='')
 
-	for(i in seq(p))
+	for(i in seq(self$nterms))
 	{
 		if(i == 1)
 			cmd <- paste(cmd,"s(NU1, k=",k,	sopt, sep='') 
@@ -197,46 +209,56 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 			cmd <- paste(cmd,"+s(NU", i,", k=",k,sopt,sep='')
 	}
 
-	#Update the initial fitting of the PPR with the gam settings
 	w <- self$w
-	sig2 <- self$sig2
-	sig2_old <- Inf
-	
-	iter <- 0
 	a <- as.vector(self$alpha)
-	while(abs(sig2-sig2_old) > gls_tol)
+
+	#Update the initial fitting of the PPR with the gam settings
+	if(self$criteria == 'gls')
 	{
-		
-		arg <- list(p = p , y = self$response, 
-			x = as.matrix(self$x), w = w, cmd = cmd)
+		sig2 <- self$sig2
+		sig2_old <- Inf
+		iter <- 0
 	
-		sol <- optim(a, ppr_alpha, arg = arg, ...)
-		a <- sol$par
-	
-		# Fit a gam object with the optimal alphas
-		amat <- alpha2mat(a, arg$p)
-		nu <- arg$x %*% amat
-		yx <- data.frame(arg$y,nu)
-		names(yx) <- c('Y',paste('NU',seq(arg$p),sep=''))
-	
-		fit <- gam(as.formula(cmd), data = yx, weights = self$w, ...)
-			
-		sig2_old <- sig2 	
-		sig2 <- fit$sig2
-		w <- 1 / (1 + self$sample_var/sig2)
-		iter <- iter + 1
-		
-		if(iter > gls_maxit)
+		while(abs(sig2-sig2_old) > gls_tol)
 		{
-			cat('\nWarning GLS maximum iterations reached\n')
-			break
-		}
-	}
-	ans <- list(gam = fit, w = w, alpha = as.data.frame(amat))
-		
-	rownames(ans$alpha) <- rownames(self$alpha)
-	colnames(ans$alpha) <- colnames(self$alpha)
+			arg <- list(nterms = self$nterms , y = self$response, 
+				x = as.matrix(self$x), w = w, cmd = cmd)
+
+			sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
+			a <- sol$par
 	
+			# Fit a gam object with the optimal alphas
+			fit <- ppr_alpha(a, arg = arg, opti = FALSE,...)
+			
+			sig2_old <- sig2 	
+			sig2 <- fit$sig2
+			w <- 1 / (1 + self$sample_var/sig2)
+			iter <- iter + 1
+		
+			if(iter > gls_maxit)
+			{
+				cat('\nWarning GLS maximum iterations reached\n')
+				break
+			}
+		} # gls while
+	}
+	else
+	{
+		arg <- list(nterms = self$nterms , y = self$response, 
+				x = as.matrix(self$x), w = w, cmd = cmd)
+		
+		sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
+		a <- sol$par
+				
+		fit <- ppr_alpha(a, arg = arg, opti = FALSE, ...)
+	}
+	
+	amat <- as.data.frame(alpha2mat(a,arg$nterms))
+	rownames(amat) <- rownames(amat)
+	colnames(amat) <- colnames(amat)
+	
+	ans <- list(gam = fit, w = w, alpha = amat)
+			
 	class(ans) <- append('list','gppr')
 	
 	return(ans)
