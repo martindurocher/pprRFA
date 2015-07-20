@@ -91,6 +91,7 @@ Association, 97, 1042–1054. doi:10.1198/016214502388618861
 \examples{
 
 # load data from nsRFA packages
+library(nsRFA)
 data(hydroSIMN)
 
 attrib <- data.frame(parameters[,1],scale(log(parameters[,3:6])))

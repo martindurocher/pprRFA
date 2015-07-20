@@ -72,7 +72,7 @@ Stuetzle (1981)
 
 If generalized least-squares are used (criteria == gls), the total error 
 is characterized by a sampling error and a model error. 
-See Tasker & Stedinger (1989). The resulting covariance matrix is
+See Tasker & Stedinger (1989). The resulting covariance matrix isgit
 
 $$\sigma^2 I + \Sigma$$
 
