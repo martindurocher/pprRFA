@@ -173,7 +173,7 @@ alpha2mat <- function(alpha,nterms)
 	return(ans)
 }
 
-ppr_alpha <- function(alpha,arg, opti)
+ppr_alpha <- function(alpha,arg, opti, lambda = 0)
 {
 	#optimize a gam model for given alphas
 	# used by ppr2gam
@@ -182,6 +182,9 @@ ppr_alpha <- function(alpha,arg, opti)
 	yx <- data.frame(arg$y,nu)
 	names(yx) <- c('Y',paste('NU',seq(arg$nterms),sep=''))
 	
+	#penalty on alphas
+	pen <- sum(abs(alpha)^3)
+	
 	if(is.null(arg$w))
 		fit <- gam(as.formula(arg$cmd), data = yx)
 	else
@@ -189,13 +192,13 @@ ppr_alpha <- function(alpha,arg, opti)
 	
 	# opti == TRUE is used when optimizing alpha
 	if(opti)
-		return(fit$gcv.ubre)
+		return(fit$gcv.ubre + lambda * pen)
 	else
 		return(fit)
 }
 
 ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE, 
-	gls_tol = 1e-6, gls_maxit = 10,...)
+	gls_tol = 1e-6, gls_maxit = 10, lambda = 0, ...)
 {
 	# create string for the model formula
 	cmd <- "Y~"
@@ -224,11 +227,13 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 			arg <- list(nterms = self$nterms , y = self$response, 
 				x = as.matrix(self$x), w = w, cmd = cmd)
 
-			sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
+			sol <- optim(a, ppr_alpha, arg = arg, lambda = lambda,
+				opti = TRUE, ...)
 			a <- sol$par
 	
 			# Fit a gam object with the optimal alphas
-			fit <- ppr_alpha(a, arg = arg, opti = FALSE,...)
+			fit <- ppr_alpha(a, arg = arg, lambda = lambda,
+				opti = FALSE,...)
 			
 			sig2_old <- sig2 	
 			sig2 <- fit$sig2
@@ -247,17 +252,20 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 		arg <- list(nterms = self$nterms , y = self$response, 
 				x = as.matrix(self$x), w = w, cmd = cmd)
 		
-		sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
+		sol <- optim(a, ppr_alpha, arg = arg, lambda = lambda,
+			opti = TRUE, ...)
+			
 		a <- sol$par
 				
-		fit <- ppr_alpha(a, arg = arg, opti = FALSE, ...)
+		fit <- ppr_alpha(a, arg = arg, lambda = lambda, 
+			opti = FALSE, ...)
 	}
 	
 	amat <- as.data.frame(alpha2mat(a,arg$nterms))
 	rownames(amat) <- rownames(amat)
 	colnames(amat) <- colnames(amat)
 	
-	ans <- list(gam = fit, w = w, alpha = amat)
+	ans <- list(gam = fit, w = w, alpha = amat, lambda = lambda)
 			
 	class(ans) <- append('list','gppr')
 	
