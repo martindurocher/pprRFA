@@ -1,7 +1,7 @@
 Package: pprRFA
 Type: Package
 Title: Projection pursuit regression for regional frequency analysis
-Version: 0.2
+Version: 0.3
 Date: 2015-07-17
 Author: Martin Durocher
 Maintainer: Martin Durocher <martin.durocher@ete.inrs.ca>

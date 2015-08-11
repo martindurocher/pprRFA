@@ -3,7 +3,10 @@ new_rfa_data <- function(annual,attrib)
 	# verify format of the 
 	y <- as.data.frame(annual)
 	if( ncol(y) != 3)
+	{
+		warning('Not the proper number of rows for annual')
 		return(-1)
+	}
 	else
 		names(y) <- c('no','year','ann')
 		
@@ -11,7 +14,10 @@ new_rfa_data <- function(annual,attrib)
 	# annual and attrib
 	tmp <- unique(annual[,1])
 	if( sum(tmp == attrib[,1]) != length(attrib[,1]) )
+	{
+		warning('The identification numbers do not match')
 		return(-2)
+	}
 		
 	# calculate the record length of each stations
 	nsite <- sapply(split(y[,3],y[,1]),length)
@@ -79,6 +85,51 @@ set_response.rfa <- function(self,z)
 }
 
 zppr <- function(x,...) UseMethod('zppr',x)
+zppr.matrix <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
+{
+	X <- as.data.frame(X)
+	return(zppr.data.frame(y,X, w = NULL, criteria = 'ols', nterms, ...))
+}
+
+zppr.data.frame <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
+{	
+	#wrapper for basic ppr functions in stats packages
+	if(criteria == 'ols' )
+	{
+		fit <- ppr(y[,1]~., data=X, nterms = nterms,...)
+	}
+	else if(criteria == 'wls')
+	{	
+		if(is.null(w)) 
+		{
+			warning('WLS criteria with null weights')
+			return(NULL)
+		}
+		
+		fit <- ppr(y[,1]~., data=X, nterms = nterms, weights = w,...)
+	}
+	else if(criteria == 'gls')
+	{
+		fit <- ppr(y[,1]~., data=X, nterms = nterms, ...)
+			
+		sig2 <- var(residuals(fit))
+		
+		w <- 1/(1 + y[,2]/sig2)
+		
+		fit <- ppr(y[,1]~., data=X, nterms = nterms, weights = w,...)		
+	}
+	
+	sig2 <- var(residuals(fit))
+			
+	ans <- list(response = y[,1], fit = fit, alpha = fit$alpha,
+		w = w, criteria = criteria, x = X, beta = fit$beta,
+		sample_var = y[,2], sig2 = sig2, nterms = nterms,
+		p = ncol(X) )
+		
+	class(ans) <- append(class(ans),'zppr')	
+	return(ans)
+}
+
 zppr.rfa <- function(self, w=NULL, criteria = 'wls', nterms = 1, ...)
 {
 	#wrapper for basic ppr functions in stats packages
@@ -100,14 +151,12 @@ zppr.rfa <- function(self, w=NULL, criteria = 'wls', nterms = 1, ...)
 		fit <- ppr(self$response[,2]~., data=self$x[,-1], 
 			nterms = nterms, ...)
 			
-		nloop <- 100
 		sig2 <- var(residuals(fit))
 		
 		w <- 1/(1 + self$response[,3]/sig2)
 		
 		fit <- ppr(self$response[,2]~., data=self$x[,-1], nterms = nterms,
-			weights = w,...)
-			
+			weights = w,...)		
 	}
 	
 	sig2 <- var(residuals(fit))
