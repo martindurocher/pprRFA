@@ -222,7 +222,7 @@ alpha2mat <- function(alpha,nterms)
 	return(ans)
 }
 
-ppr_alpha <- function(alpha,arg, opti, lambda = 0)
+ppr_alpha <- function(alpha,arg, opti)
 {
 	#optimize a gam model for given alphas
 	# used by ppr2gam
@@ -241,13 +241,13 @@ ppr_alpha <- function(alpha,arg, opti, lambda = 0)
 	
 	# opti == TRUE is used when optimizing alpha
 	if(opti)
-		return(fit$gcv.ubre + lambda * pen)
+		return(fit$gcv.ubre)
 	else
 		return(fit)
 }
 
 ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE, 
-	gls_tol = 1e-6, gls_maxit = 10, lambda = 0, ...)
+	gls_tol = 1e-6, gls_maxit = 10, ...)
 {
 	# create string for the model formula
 	cmd <- "Y~"
@@ -276,13 +276,11 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 			arg <- list(nterms = self$nterms , y = self$response, 
 				x = as.matrix(self$x), w = w, cmd = cmd)
 
-			sol <- optim(a, ppr_alpha, arg = arg, lambda = lambda,
-				opti = TRUE, ...)
+			sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
 			a <- sol$par
 	
 			# Fit a gam object with the optimal alphas
-			fit <- ppr_alpha(a, arg = arg, lambda = lambda,
-				opti = FALSE,...)
+			fit <- ppr_alpha(a, arg = arg, opti = FALSE,...)
 			
 			sig2_old <- sig2 	
 			sig2 <- fit$sig2
@@ -301,20 +299,18 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 		arg <- list(nterms = self$nterms , y = self$response, 
 				x = as.matrix(self$x), w = w, cmd = cmd)
 		
-		sol <- optim(a, ppr_alpha, arg = arg, lambda = lambda,
-			opti = TRUE, ...)
+		sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
 			
 		a <- sol$par
 				
-		fit <- ppr_alpha(a, arg = arg, lambda = lambda, 
-			opti = FALSE, ...)
+		fit <- ppr_alpha(a, arg = arg, opti = FALSE, ...)
 	}
 	
 	amat <- as.data.frame(alpha2mat(a,arg$nterms))
 	rownames(amat) <- rownames(amat)
 	colnames(amat) <- colnames(amat)
 	
-	ans <- list(gam = fit, w = w, alpha = amat, lambda = lambda)
+	ans <- list(gam = fit, w = w, alpha = amat)
 			
 	class(ans) <- append('list','gppr')
 	
