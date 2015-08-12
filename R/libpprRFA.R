@@ -76,10 +76,24 @@ set_response <- function(self,z)
 }
 
 zppr <- function(x,...) UseMethod('zppr',x)
+
+zppr.numeric  <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
+{
+	y <- data.frame(y = y, sigma2 = 1)
+	X <- as.data.frame(X)
+	
+	return(zppr.data.frame(y,X, w = w, criteria = criteria, 
+		nterms = nterms, ...))
+}
+
 zppr.matrix <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
 {
+	y <- as.data.frame(y)
+	names(y) <- c('y','sigma2')
 	X <- as.data.frame(X)
-	return(zppr.data.frame(y,X, w = NULL, criteria = 'ols', nterms, ...))
+	
+	return(zppr.data.frame(y,X, w = w, criteria = criteria, 
+		nterms = nterms, ...))
 }
 
 zppr.data.frame <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
@@ -120,8 +134,22 @@ zppr.data.frame <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
 	return(ans)
 }
 
+zppr.rfa  <- function(y,X, w = NULL, criteria = 'wls', nterms = 1, ...)
+{
+	y <- as.data.frame(self$response[,2:3])
+	X <- as.data.frame(self$x[,-1])
+	
+	if(is.null(w) & criteria == 'wls')
+		w <- self$nsite
+	
+	return(zppr.data.frame(y,X, w = w, criteria = criteria, 
+		nterms = nterms, ...))
+}
+
 zppr.rfa <- function(self, w=NULL, criteria = 'wls', nterms = 1, ...)
 {
+
+			
 	if(criteria == 'ols' )
 	{
 		fit <- ppr(self$response[,2]~., data=self$x[,-1], 
@@ -129,8 +157,7 @@ zppr.rfa <- function(self, w=NULL, criteria = 'wls', nterms = 1, ...)
 	}
 	else if(criteria == 'wls')
 	{	
-		if(is.null(w))
-			w <- self$nsite
+
 		
 		fit <- ppr(self$response[,2]~., data=self$x[,-1], nterms = nterms,
 			weights = w,...)

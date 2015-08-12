@@ -12,7 +12,7 @@ source('~/github/pprRFA/R/libpprRFA.R')
 library(nsRFA)
 data(hydroSIMN)
 
-USE_CACHE <- FALSE
+USE_CACHE <- TRUE
 CACHE_FILE <- '~/github/pprRFA/inst/cache.Rdata'
  
 attrib <- data.frame(parameters[,1],scale(log(parameters[,3:6])))
@@ -47,9 +47,14 @@ terms_plot(gfit)
 
 #####################################
 # PPR fitting without using rfa object 
-y <- z[,-1]
 X <- mydata$x[,-1]
+
+y <- z[,2]
+tmp <- zppr(y, X, nterms = 1)
+
+y <- z[,-1]
 tmp <- zppr(y, X, nterms = 2, criteria = 'ols')
+
 gfit <- ppr2gam(tmp, k = 5, subs = seq(20))
 print(gfit)
 print(predict(gfit))
