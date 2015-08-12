@@ -1,25 +1,21 @@
 new_rfa_data <- function(annual,attrib)
 {
-	# verify format of the 
 	y <- as.data.frame(annual)
 	if( ncol(y) != 3)
 	{
-		warning('Not the proper number of rows for annual')
-		return(-1)
+		warning('Not the proper format for annual')
+		return(NULL)
 	}
 	else
 		names(y) <- c('no','year','ann')
 		
-	# verify that the stations number matching between
-	# annual and attrib
 	tmp <- unique(annual[,1])
 	if( sum(tmp == attrib[,1]) != length(attrib[,1]) )
 	{
 		warning('The identification numbers do not match')
-		return(-2)
+		return(NULL)
 	}
 		
-	# calculate the record length of each stations
 	nsite <- sapply(split(y[,3],y[,1]),length)
 		
 	self <- list(x=attrib, y = annual, n = length(tmp), 
@@ -30,13 +26,10 @@ new_rfa_data <- function(annual,attrib)
 	return(self)
 }
 
-get_split_an <- function(x) UseMethod('get_split_an',x)
-get_split_an.rfa <- function(self) split(self$y[,3],self$y[,1])
+get_split_an <- function(self) split(self$y[,3],self$y[,1])
 
-at_site_boot_log <- function(x,...) UseMethod('at_site_boot_log',x)
-at_site_boot_log.rfa <- function(self, ret = 2, nboot=500, ...)
+at_site_boot_log <- function(self, ret = 2, nboot=500, ...)
 {
-
 	ylist <- get_split_an(self)
 	m <- length(ylist)
 	ans <- data.frame(z = rep(0,m), var = rep(0,m))
@@ -68,10 +61,8 @@ at_site_boot_log.rfa <- function(self, ret = 2, nboot=500, ...)
 	return(ans)
 }
 
-set_response <- function(x,...) UseMethod('set_response',x)
-set_response.rfa <- function(self,z)
+set_response <- function(self,z)
 {
-	#adding or change a response value from rfa data
 	z <- as.data.frame(z)
 	names(z)<-c('no','z','var')
 	
@@ -93,7 +84,6 @@ zppr.matrix <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
 
 zppr.data.frame <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
 {	
-	#wrapper for basic ppr functions in stats packages
 	if(criteria == 'ols' )
 	{
 		fit <- ppr(y[,1]~., data=X, nterms = nterms,...)
@@ -132,7 +122,6 @@ zppr.data.frame <- function(y,X, w = NULL, criteria = 'ols', nterms, ...)
 
 zppr.rfa <- function(self, w=NULL, criteria = 'wls', nterms = 1, ...)
 {
-	#wrapper for basic ppr functions in stats packages
 	if(criteria == 'ols' )
 	{
 		fit <- ppr(self$response[,2]~., data=self$x[,-1], 
@@ -173,7 +162,6 @@ zppr.rfa <- function(self, w=NULL, criteria = 'wls', nterms = 1, ...)
 
 print.zppr <- function(self)
 {
-	# print a basic summary of the ppr fit
 	alpha <- as.matrix(self$alpha)
 	betas <- self$beta
 	
@@ -197,7 +185,6 @@ print.zppr <- function(self)
 
 plot.zppr <- function(self)
 {
-	# plot basic graphics of the residuals
 	zerr <- residuals(self$fit)
 	zhat <- predict(self$fit)
 	
@@ -212,8 +199,6 @@ plot.zppr <- function(self)
 
 alpha2mat <- function(alpha,nterms)
 {
-	# transform a vector of alphas in a matrix with unitary columns
-	# used by ppr2gam
 	ans <- matrix(alpha, ncol = nterms)
 
 	for(i in seq(nterms))
@@ -224,22 +209,17 @@ alpha2mat <- function(alpha,nterms)
 
 ppr_alpha <- function(alpha,arg, opti)
 {
-	#optimize a gam model for given alphas
-	# used by ppr2gam
 	amat <- alpha2mat(alpha,arg$nterms)
 	nu <- arg$x %*% amat
 	yx <- data.frame(arg$y,nu)
 	names(yx) <- c('Y',paste('NU',seq(arg$nterms),sep=''))
-	
-	#penalty on alphas
-	pen <- sum(abs(alpha)^3)
-	
+		
 	if(is.null(arg$w))
-		fit <- gam(as.formula(arg$cmd), data = yx)
+		fit <- gam(as.formula(arg$cmd), data = yx, subset = arg$subs)
 	else
-		fit <- gam(as.formula(arg$cmd), data = yx, weights = arg$w)
+		fit <- gam(as.formula(arg$cmd), data = yx, weights = arg$w, 
+			subset = arg$subs)
 	
-	# opti == TRUE is used when optimizing alpha
 	if(opti)
 		return(fit$gcv.ubre)
 	else
@@ -247,9 +227,8 @@ ppr_alpha <- function(alpha,arg, opti)
 }
 
 ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE, 
-	gls_tol = 1e-6, gls_maxit = 10, ...)
+	gls_tol = 1e-6, gls_maxit = 10, subs = NULL, ...)
 {
-	# create string for the model formula
 	cmd <- "Y~"
 	sopt <- paste(",bs='", basis, "',fx=",fx,",m=",m,")",sep='')
 
@@ -263,8 +242,9 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 
 	w <- self$w
 	a <- as.vector(self$alpha)
+	
+	if(is.null(subs)) subs <- seq(length(self$response))
 
-	#Update the initial fitting of the PPR with the gam settings
 	if(self$criteria == 'gls')
 	{
 		sig2 <- self$sig2
@@ -274,12 +254,11 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 		while(abs(sig2-sig2_old) > gls_tol)
 		{
 			arg <- list(nterms = self$nterms , y = self$response, 
-				x = as.matrix(self$x), w = w, cmd = cmd)
+				x = as.matrix(self$x), w = w, cmd = cmd, subs = subs)
 
 			sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
 			a <- sol$par
 	
-			# Fit a gam object with the optimal alphas
 			fit <- ppr_alpha(a, arg = arg, opti = FALSE,...)
 			
 			sig2_old <- sig2 	
@@ -292,12 +271,12 @@ ppr2gam <- function(self, k = 5, basis = 'cr', m = 2, fx = FALSE,
 				cat('\nWarning GLS maximum iterations reached\n')
 				break
 			}
-		} # gls while
+		}
 	}
 	else
 	{
 		arg <- list(nterms = self$nterms , y = self$response, 
-				x = as.matrix(self$x), w = w, cmd = cmd)
+				x = as.matrix(self$x), w = w, cmd = cmd, subs = subs)
 		
 		sol <- optim(a, ppr_alpha, arg = arg, opti = TRUE, ...)
 			
@@ -340,6 +319,7 @@ print.gppr <- function(self)
 	print(summary(self$gam))
 	cat('\nAlpha:\n')
 	print(self$alpha)
+	cat('\n\n')
 }
 
 residuals.gppr <- function(self,...)
@@ -347,7 +327,15 @@ residuals.gppr <- function(self,...)
 	residuals.gam(self$gam,...)
 }
 
-predict.gppr <- function(self,...)
+predict.gppr <- function(self, newdata = NULL, ...)
 {
-	predict.gam(self$gam,...)
+	if(is.null(newdata)) 
+		return(predict(self$gam))
+	else
+	{
+		nu <- data.frame(as.matrix(newdata) %*% as.matrix(self$alpha))
+		names(nu) <- paste('NU',seq(ncol(self$alpha)),sep='')
+
+		return(predict.gam(self$gam, newdata = nu,...))
+	}
 }
